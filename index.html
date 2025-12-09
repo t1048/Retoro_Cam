@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>RetroCam 2000</title>
+    
+    <!-- PWA Settings -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#1a1a1a">
+    
+    <!-- Tailwind CSS (CDN) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Lucide Icons (CDN) -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        body { touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+        .pixelated { image-rendering: pixelated; }
+        /* Custom scrollbar for gallery */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #262626; }
+        ::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+    </style>
+</head>
+<body class="bg-[#1a1a1a] text-white font-sans overflow-hidden h-[100dvh] w-screen flex flex-col">
+
+    <!-- 1. Power/Start Screen -->
+    <div id="screen-power" class="absolute inset-0 z-50 bg-neutral-900 flex flex-col items-center justify-center p-4">
+        <button id="btn-power" class="group flex flex-col items-center gap-4 p-8 rounded-full bg-neutral-800 border border-neutral-700 shadow-[0_0_15px_rgba(0,0,0,0.5)] active:scale-95 transition-all">
+            <i data-lucide="power" class="w-12 h-12 text-teal-400 group-hover:drop-shadow-[0_0_8px_rgba(45,212,191,0.6)]"></i>
+            <span class="font-mono text-sm tracking-widest text-teal-400">POWER ON</span>
+        </button>
+        <p class="mt-8 font-mono text-xs text-neutral-500 text-center">Camera access required.<br>Portrait & Landscape supported.</p>
+    </div>
+
+    <!-- 2. Main Viewfinder Area -->
+    <div id="main-container" class="flex-1 relative bg-black overflow-hidden flex items-center justify-center hidden">
+        
+        <!-- Flash Effect -->
+        <div id="flash-overlay" class="absolute inset-0 bg-white pointer-events-none z-50 opacity-0 transition-opacity duration-150"></div>
+
+        <!-- Camera Mode -->
+        <div id="mode-camera" class="w-full h-full relative">
+            <video id="camera-video" autoplay playsinline muted class="w-full h-full object-cover" style="filter: contrast(1.1) brightness(1.1);"></video>
+            
+            <!-- OSD -->
+            <div class="absolute top-4 left-4 text-green-400 font-mono text-lg drop-shadow-md z-10 pointer-events-none">
+                <span class="animate-pulse">●</span> REC
+            </div>
+            <div id="osd-res" class="absolute top-4 right-4 text-white font-mono text-sm drop-shadow-md bg-black/30 px-2 rounded z-10 pointer-events-none">
+                VGA
+            </div>
+            <div id="osd-date" class="absolute bottom-6 right-4 text-[#ffaa00] font-mono text-xl drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)] font-bold z-10 pointer-events-none">
+                '00 00 00
+            </div>
+            <!-- Guide Lines -->
+            <div class="absolute inset-0 pointer-events-none opacity-30">
+                <div class="w-full h-1/3 border-b border-white/50 absolute top-0"></div>
+                <div class="w-full h-1/3 border-b border-white/50 absolute top-1/3"></div>
+                <div class="h-full w-1/3 border-r border-white/50 absolute left-0"></div>
+                <div class="h-full w-1/3 border-r border-white/50 absolute left-1/3"></div>
+            </div>
+        </div>
+
+        <!-- Preview Mode -->
+        <div id="mode-preview" class="w-full h-full hidden flex items-center justify-center bg-neutral-900 relative">
+            <img id="preview-image" src="" alt="Captured" class="max-w-full max-h-full object-contain shadow-[0_0_20px_rgba(0,0,0,0.8)]">
+            <div class="absolute top-4 left-0 w-full text-center pointer-events-none">
+                <span class="bg-blue-600 text-white text-xs px-2 py-1 font-mono uppercase tracking-wider shadow-sm">Review Mode</span>
+            </div>
+        </div>
+
+        <!-- Gallery Mode -->
+        <div id="mode-gallery" class="w-full h-full hidden absolute inset-0 bg-neutral-800 z-20 flex flex-col">
+            <div class="p-4 bg-neutral-800/95 backdrop-blur sticky top-0 z-30 flex items-center gap-2 border-b border-neutral-700">
+                <i data-lucide="image" class="text-teal-400 w-5 h-5"></i>
+                <h2 class="text-teal-400 font-mono">CLOUD GALLERY</h2>
+                <span id="gallery-count" class="text-neutral-500 font-mono text-sm ml-auto">(0)</span>
+            </div>
+            <div id="gallery-grid" class="grid grid-cols-2 md:grid-cols-3 gap-4 p-4 overflow-y-auto pb-32">
+                <!-- Photos injected here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden Canvas -->
+    <canvas id="process-canvas" class="hidden"></canvas>
+
+    <!-- 3. Controls Area -->
+    <div id="controls-panel" class="bg-neutral-200 border-neutral-300 shadow-[0_-5px_15px_rgba(0,0,0,0.3)] relative z-40 hidden transition-all">
+        
+        <!-- Left: Mode Switch -->
+        <div id="grp-mode" class="flex items-center justify-center">
+            <button id="btn-toggle-mode" class="flex flex-col items-center gap-1 text-neutral-600 active:text-blue-600 active:scale-95 transition-transform">
+                <div class="w-10 h-10 rounded bg-neutral-300 border-b-4 border-neutral-400 flex items-center justify-center shadow-sm">
+                    <i data-lucide="image" id="icon-mode" class="w-5 h-5"></i>
+                </div>
+                <span id="text-mode" class="text-[10px] font-bold tracking-tighter">PLAY</span>
+            </button>
+        </div>
+
+        <!-- Center: Actions -->
+        <div id="grp-actions" class="flex items-center justify-center gap-6">
+            
+            <!-- Camera Actions -->
+            <div id="actions-camera" class="flex items-center gap-6">
+                <button id="btn-switch-cam" class="w-10 h-10 rounded-full bg-neutral-300 border-b-2 border-neutral-400 flex items-center justify-center text-neutral-600 active:bg-neutral-400 active:scale-95 shadow-sm">
+                    <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                </button>
+                <button id="btn-shutter" class="w-20 h-20 rounded-full bg-gradient-to-b from-neutral-200 to-neutral-300 border-4 border-neutral-400 flex items-center justify-center shadow-[0_4px_10px_rgba(0,0,0,0.2)] active:shadow-inner active:scale-95 transition-all">
+                    <div class="w-16 h-16 rounded-full bg-gradient-to-br from-neutral-100 to-neutral-200 border border-neutral-300"></div>
+                </button>
+            </div>
+
+            <!-- Preview Actions -->
+            <div id="actions-preview" class="hidden flex gap-4">
+                <button id="btn-delete" class="w-14 h-14 rounded-full bg-red-100 border-b-4 border-red-200 flex flex-col items-center justify-center text-red-600 active:translate-y-1 active:border-b-0 shadow-sm">
+                    <i data-lucide="trash-2" class="w-5 h-5"></i>
+                    <span class="text-[9px] font-bold">DEL</span>
+                </button>
+                <button id="btn-save-local" class="w-14 h-14 rounded-full bg-blue-100 border-b-4 border-blue-200 flex flex-col items-center justify-center text-blue-600 active:translate-y-1 active:border-b-0 shadow-sm">
+                    <i data-lucide="download" class="w-5 h-5"></i>
+                    <span class="text-[9px] font-bold">SAVE</span>
+                </button>
+                <button id="btn-save-cloud" class="w-14 h-14 rounded-full bg-green-100 border-b-4 border-green-200 flex flex-col items-center justify-center text-green-600 active:translate-y-1 active:border-b-0 shadow-sm">
+                    <i data-lucide="share-2" class="w-5 h-5"></i>
+                    <span class="text-[9px] font-bold">CLOUD</span>
+                </button>
+            </div>
+
+            <!-- Gallery Status -->
+            <div id="actions-gallery" class="hidden text-xs font-mono text-neutral-500 text-center leading-tight">
+                Viewing<br>Card
+            </div>
+        </div>
+
+        <!-- Right: Deco -->
+        <div id="grp-deco" class="flex flex-col items-end gap-1 opacity-50 justify-center">
+            <div class="w-full h-1 bg-neutral-400 rounded-full line-1"></div>
+            <div class="w-3/4 h-1 bg-neutral-400 rounded-full line-2"></div>
+            <div class="w-1/2 h-1 bg-neutral-400 rounded-full line-3"></div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK (Modular) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        // --- 設定開始: ここをご自身のFirebase設定に書き換えてください ---
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT_ID.appspot.com",
+            messagingSenderId: "YOUR_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+        // --- 設定終了 ---
+
+        // App State
+        let app, auth, db, user;
+        let stream = null;
+        let capturedDataUrl = null;
+        let facingMode = 'environment';
+        let currentMode = 'power'; // power, camera, preview, gallery
+        let isLandscape = false;
+
+        // DOM Elements
+        const els = {
+            screenPower: document.getElementById('screen-power'),
+            mainContainer: document.getElementById('main-container'),
+            video: document.getElementById('camera-video'),
+            canvas: document.getElementById('process-canvas'),
+            previewImg: document.getElementById('preview-image'),
+            galleryGrid: document.getElementById('gallery-grid'),
+            galleryCount: document.getElementById('gallery-count'),
+            flash: document.getElementById('flash-overlay'),
+            controls: document.getElementById('controls-panel'),
+            osdRes: document.getElementById('osd-res'),
+            osdDate: document.getElementById('osd-date'),
+            
+            // Mode containers
+            modeCamera: document.getElementById('mode-camera'),
+            modePreview: document.getElementById('mode-preview'),
+            modeGallery: document.getElementById('mode-gallery'),
+
+            // Control groups
+            actionsCamera: document.getElementById('actions-camera'),
+            actionsPreview: document.getElementById('actions-preview'),
+            actionsGallery: document.getElementById('actions-gallery'),
+
+            // Buttons
+            btnPower: document.getElementById('btn-power'),
+            btnToggleMode: document.getElementById('btn-toggle-mode'),
+            iconMode: document.getElementById('icon-mode'),
+            textMode: document.getElementById('text-mode'),
+            btnSwitchCam: document.getElementById('btn-switch-cam'),
+            btnShutter: document.getElementById('btn-shutter'),
+            btnDelete: document.getElementById('btn-delete'),
+            btnSaveLocal: document.getElementById('btn-save-local'),
+            btnSaveCloud: document.getElementById('btn-save-cloud'),
+        };
+
+        // Initialize Icons
+        lucide.createIcons();
+
+        // 1. Initialize Firebase
+        function initFirebase() {
+            try {
+                if (firebaseConfig.apiKey === "YOUR_API_KEY") {
+                    console.warn("Firebase config not set.");
+                    // Demo mode without firebase features if key is missing
+                    return;
+                }
+                app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+
+                signInAnonymously(auth).catch(console.error);
+                onAuthStateChanged(auth, (u) => {
+                    user = u;
+                    if(user) subscribeToGallery();
+                });
+            } catch (e) {
+                console.error("Firebase init failed:", e);
+            }
+        }
+
+        function subscribeToGallery() {
+            if (!db) return;
+            // Simplified path for general use: 'retro_photos' collection
+            const q = query(collection(db, 'retro_photos'), orderBy('createdAt', 'desc'));
+            onSnapshot(q, (snapshot) => {
+                els.galleryGrid.innerHTML = '';
+                els.galleryCount.textContent = `(${snapshot.docs.length})`;
+                
+                if (snapshot.empty) {
+                    els.galleryGrid.innerHTML = '<div class="col-span-full text-center text-gray-500 py-10 font-mono text-xs">No images found.</div>';
+                    return;
+                }
+
+                snapshot.docs.forEach(doc => {
+                    const data = doc.data();
+                    const date = data.createdAt ? new Date(data.createdAt.seconds * 1000).toLocaleDateString() : 'Just now';
+                    
+                    const div = document.createElement('div');
+                    div.className = "bg-white p-1 shadow-md rotate-1 hover:rotate-0 transition-transform duration-300";
+                    div.innerHTML = `
+                        <img src="${data.imageUrl}" class="w-full aspect-auto object-cover bg-gray-200 pixelated" loading="lazy">
+                        <div class="mt-1 text-[10px] text-gray-500 font-mono text-right">${date}</div>
+                    `;
+                    els.galleryGrid.appendChild(div);
+                });
+            });
+        }
+
+        // 2. Camera Logic
+        async function startCamera() {
+            try {
+                if (stream) stream.getTracks().forEach(t => t.stop());
+                
+                const constraints = {
+                    video: {
+                        facingMode: facingMode,
+                        width: { ideal: isLandscape ? 1280 : 720 },
+                        height: { ideal: isLandscape ? 720 : 1280 }
+                    },
+                    audio: false
+                };
+                
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                els.video.srcObject = stream;
+            } catch (err) {
+                console.error("Camera fail:", err);
+                alert("Camera access denied or failed.");
+            }
+        }
+
+        function stopCamera() {
+            if (stream) {
+                stream.getTracks().forEach(t => t.stop());
+                stream = null;
+            }
+        }
+
+        // 3. Capture Logic
+        function takePhoto() {
+            if (!stream) return;
+
+            // Flash
+            els.flash.style.opacity = '1';
+            setTimeout(() => els.flash.style.opacity = '0', 150);
+
+            const ctx = els.canvas.getContext('2d');
+            
+            // Set VGA size based on orientation
+            const width = isLandscape ? 640 : 480;
+            const height = isLandscape ? 480 : 640;
+            
+            els.canvas.width = width;
+            els.canvas.height = height;
+
+            // Draw Video (Cover fit)
+            const vW = els.video.videoWidth;
+            const vH = els.video.videoHeight;
+            const vAspect = vW / vH;
+            const cAspect = width / height;
+            
+            let dW, dH, dX, dY;
+            
+            if (vAspect > cAspect) {
+                dH = height;
+                dW = height * vAspect;
+                dY = 0;
+                dX = -(dW - width) / 2;
+            } else {
+                dW = width;
+                dH = width / vAspect;
+                dX = 0;
+                dY = -(dH - height) / 2;
+            }
+
+            // Filter
+            ctx.filter = 'contrast(1.2) sepia(0.2) saturate(0.8) brightness(1.1)';
+            ctx.drawImage(els.video, dX, dY, dW, dH);
+            ctx.filter = 'none';
+
+            // Noise
+            const imgData = ctx.getImageData(0, 0, width, height);
+            const data = imgData.data;
+            for (let i = 0; i < data.length; i += 4) {
+                const noise = (Math.random() - 0.5) * 20;
+                data[i] += noise;
+                data[i+1] += noise;
+                data[i+2] += noise;
+            }
+            ctx.putImageData(imgData, 0, 0);
+
+            // Date Stamp
+            const now = new Date();
+            const dateStr = `'${String(now.getFullYear()).slice(2)} ${String(now.getMonth()+1).padStart(2,'0')} ${String(now.getDate()).padStart(2,'0')}`;
+            
+            ctx.fillStyle = '#ffaa00';
+            ctx.shadowColor = 'black';
+            ctx.shadowBlur = 2;
+            ctx.font = isLandscape ? 'bold 24px "Courier New", monospace' : 'bold 20px "Courier New", monospace';
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'bottom';
+            ctx.fillText(dateStr, width - 15, height - 15);
+
+            // Save
+            capturedDataUrl = els.canvas.toDataURL('image/jpeg', 0.6);
+            els.previewImg.src = capturedDataUrl;
+            
+            switchMode('preview');
+        }
+
+        // 4. UI Handling
+        function switchMode(newMode) {
+            currentMode = newMode;
+            
+            // Reset Views
+            els.screenPower.classList.add('hidden');
+            els.mainContainer.classList.remove('hidden');
+            els.controls.classList.remove('hidden');
+            els.modeCamera.classList.add('hidden');
+            els.modePreview.classList.add('hidden');
+            els.modeGallery.classList.add('hidden');
+            
+            els.actionsCamera.classList.add('hidden');
+            els.actionsPreview.classList.add('hidden');
+            els.actionsGallery.classList.add('hidden');
+
+            if (newMode === 'camera') {
+                els.modeCamera.classList.remove('hidden');
+                els.actionsCamera.classList.remove('hidden');
+                
+                // Toggle Button state
+                els.iconMode.setAttribute('data-lucide', 'image');
+                els.textMode.textContent = 'PLAY';
+                lucide.createIcons();
+                
+                if (!stream) startCamera();
+                updateOSD();
+
+            } else if (newMode === 'preview') {
+                els.modePreview.classList.remove('hidden');
+                els.actionsPreview.classList.remove('hidden');
+                stopCamera();
+
+            } else if (newMode === 'gallery') {
+                els.modeGallery.classList.remove('hidden');
+                els.actionsGallery.classList.remove('hidden');
+                
+                // Toggle Button state
+                els.iconMode.setAttribute('data-lucide', 'camera');
+                els.textMode.textContent = 'REC';
+                lucide.createIcons();
+                stopCamera();
+            }
+        }
+
+        function updateOSD() {
+            els.osdRes.textContent = isLandscape ? "VGA WIDE" : "VGA TALL";
+            const now = new Date();
+            els.osdDate.textContent = `'${String(now.getFullYear()).slice(2)} ${String(now.getMonth()+1).padStart(2,'0')} ${String(now.getDate()).padStart(2,'0')}`;
+        }
+
+        function handleResize() {
+            isLandscape = window.innerWidth > window.innerHeight;
+            
+            const body = document.body;
+            const ctrls = els.controls;
+            const groups = [document.getElementById('grp-mode'), document.getElementById('grp-actions'), document.getElementById('grp-deco')];
+            
+            if (isLandscape) {
+                body.classList.remove('flex-col');
+                body.classList.add('flex-row');
+                
+                ctrls.className = "w-32 h-screen bg-neutral-200 border-l-4 border-neutral-300 flex flex-col items-center justify-between py-6 px-2 shadow-[-5px_0_15px_rgba(0,0,0,0.3)] relative z-40";
+                
+                groups[0].className = "flex flex-col gap-4"; // Mode
+                groups[1].className = "flex flex-col items-center gap-6"; // Actions
+                groups[2].className = "h-12 flex flex-row items-end gap-1 opacity-50"; // Deco
+                
+                document.querySelectorAll('.line-1').forEach(e => e.className = "h-full w-1 bg-neutral-400 rounded-full line-1");
+                document.querySelectorAll('.line-2').forEach(e => e.className = "h-3/4 w-1 bg-neutral-400 rounded-full line-2");
+                document.querySelectorAll('.line-3').forEach(e => e.className = "h-1/2 w-1 bg-neutral-400 rounded-full line-3");
+
+            } else {
+                body.classList.remove('flex-row');
+                body.classList.add('flex-col');
+                
+                ctrls.className = "w-full h-32 bg-neutral-200 border-t-4 border-neutral-300 flex flex-row items-center justify-between px-6 pb-6 pt-4 shadow-[0_-5px_15px_rgba(0,0,0,0.3)] relative z-40";
+                
+                groups[0].className = "flex gap-4";
+                groups[1].className = "flex items-center gap-6";
+                groups[2].className = "w-12 flex flex-col items-end gap-1 opacity-50";
+
+                document.querySelectorAll('.line-1').forEach(e => e.className = "w-full h-1 bg-neutral-400 rounded-full line-1");
+                document.querySelectorAll('.line-2').forEach(e => e.className = "w-3/4 h-1 bg-neutral-400 rounded-full line-2");
+                document.querySelectorAll('.line-3').forEach(e => e.className = "w-1/2 h-1 bg-neutral-400 rounded-full line-3");
+            }
+
+            // Restart camera if running to adjust resolution
+            if (currentMode === 'camera' && stream) {
+                startCamera();
+            }
+            updateOSD();
+        }
+
+        // 5. Event Listeners
+        window.addEventListener('resize', handleResize);
+        
+        els.btnPower.addEventListener('click', () => {
+            handleResize();
+            initFirebase();
+            switchMode('camera');
+        });
+
+        els.btnToggleMode.addEventListener('click', () => {
+            if (currentMode === 'camera') switchMode('gallery');
+            else {
+                switchMode('camera');
+                capturedDataUrl = null;
+            }
+        });
+
+        els.btnShutter.addEventListener('click', takePhoto);
+        
+        els.btnSwitchCam.addEventListener('click', () => {
+            facingMode = facingMode === 'environment' ? 'user' : 'environment';
+            startCamera();
+        });
+
+        els.btnDelete.addEventListener('click', () => {
+            capturedDataUrl = null;
+            switchMode('camera');
+        });
+
+        els.btnSaveLocal.addEventListener('click', () => {
+            if (!capturedDataUrl) return;
+            const link = document.createElement('a');
+            link.href = capturedDataUrl;
+            link.download = `retro_${Date.now()}.jpg`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+
+        els.btnSaveCloud.addEventListener('click', async () => {
+            if (!user) {
+                alert("Firebase not configured or not logged in.");
+                return;
+            }
+            try {
+                await addDoc(collection(db, 'retro_photos'), {
+                    imageUrl: capturedDataUrl,
+                    createdAt: serverTimestamp(),
+                    userId: user.uid
+                });
+                alert("Saved to cloud!");
+                switchMode('gallery');
+            } catch (e) {
+                console.error(e);
+                alert("Save failed. Check console.");
+            }
+        });
+
+        // Init
+        handleResize();
+
+    </script>
+</body>
+</html>
