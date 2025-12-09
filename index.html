@@ -167,11 +167,46 @@
                         </div>
                         <input type="range" id="flashRange" min="0" max="100" value="30">
                     </div>
+
+                    <!-- Vignette -->
+                    <div>
+                        <div class="flex justify-between text-xs mb-1">
+                            <span class="text-gray-400">Vignette</span>
+                            <span class="text-gray-400">Max</span>
+                        </div>
+                        <input type="range" id="vignetteRange" min="0" max="100" value="20">
+                    </div>
+
+                    <!-- Chromatic Aberration -->
+                    <div>
+                        <div class="flex justify-between text-xs mb-1">
+                            <span class="text-gray-400">Fringing</span>
+                            <span class="text-gray-400">Max</span>
+                        </div>
+                        <input type="range" id="aberrationRange" min="0" max="100" value="5">
+                    </div>
                 </div>
                 
                 <button id="updateBtn" class="mt-4 w-full py-2 bg-gray-700 hover:bg-gray-600 text-green-400 font-mono text-sm border border-gray-600 rounded">
                     ↺ REFRESH EFFECT
                 </button>
+            </div>
+
+            <!-- Presets -->
+            <div class="mt-4 bg-gray-800 p-4 rounded-lg border border-gray-700">
+                <h3 class="text-green-400 font-mono text-sm mb-4">PRESETS</h3>
+                <div class="space-y-3">
+                    <div class="flex gap-2">
+                        <input id="presetNameInput" type="text" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="Preset Name">
+                        <button id="savePresetBtn" class="w-28 text-center retro-btn rounded text-xs px-2 py-2">💾 Save</button>
+                    </div>
+                    <div class="flex gap-2">
+                        <select id="presetSelect" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
+                            <option value="">-- Load Preset --</option>
+                        </select>
+                        <button id="deletePresetBtn" class="w-28 text-center retro-btn rounded text-xs px-2 py-2 bg-red-400">🗑️ Delete</button>
+                    </div>
+                </div>
             </div>
 
             <!-- Action Buttons -->
@@ -214,8 +249,109 @@
         const dateToggle = document.getElementById('dateToggle');
         const noiseRange = document.getElementById('noiseRange');
         const flashRange = document.getElementById('flashRange');
+        const vignetteRange = document.getElementById('vignetteRange');
+        const aberrationRange = document.getElementById('aberrationRange');
+
+        // Preset Elements
+        const presetNameInput = document.getElementById('presetNameInput');
+        const savePresetBtn = document.getElementById('savePresetBtn');
+        const presetSelect = document.getElementById('presetSelect');
+        const deletePresetBtn = document.getElementById('deletePresetBtn');
 
         let originalImage = null;
+
+        // --- Preset Logic ---
+
+        function getPresets() {
+            try {
+                const presets = localStorage.getItem('y2kPresets');
+                return presets ? JSON.parse(presets) : {};
+            } catch (e) {
+                console.error("Could not parse presets from localStorage", e);
+                return {};
+            }
+        }
+
+        function savePresets(presets) {
+            localStorage.setItem('y2kPresets', JSON.stringify(presets));
+        }
+
+        function updatePresetList() {
+            const presets = getPresets();
+            const currentVal = presetSelect.value;
+            
+            presetSelect.innerHTML = '<option value="">-- Load Preset --</option>'; // Clear existing
+            
+            for (const name in presets) {
+                const option = document.createElement('option');
+                option.value = name;
+                option.textContent = name;
+                presetSelect.appendChild(option);
+            }
+            presetSelect.value = currentVal; // Restore selection if it still exists
+        }
+
+        function handleSavePreset() {
+            const name = presetNameInput.value.trim();
+            if (!name) {
+                alert("Please enter a name for the preset.");
+                return;
+            }
+
+            const settings = {
+                noise: noiseRange.value,
+                flash: flashRange.value,
+                vignette: vignetteRange.value,
+                aberration: aberrationRange.value
+            };
+
+            const presets = getPresets();
+            presets[name] = settings;
+            savePresets(presets);
+            
+            updatePresetList();
+            presetSelect.value = name; // Select the newly saved preset
+            presetNameInput.value = ''; // Clear input
+            showToast(`Preset '${name}' saved!`);
+        }
+
+        function handleLoadPreset() {
+            const name = presetSelect.value;
+            if (!name) return;
+
+            const presets = getPresets();
+            const settings = presets[name];
+
+            if (settings) {
+                noiseRange.value = settings.noise;
+                flashRange.value = settings.flash;
+                vignetteRange.value = settings.vignette;
+                aberrationRange.value = settings.aberration;
+                
+                // Trigger image processing
+                processImage(originalImage);
+                showToast(`Preset '${name}' loaded.`);
+            }
+        }
+
+        function handleDeletePreset() {
+            const name = presetSelect.value;
+            if (!name) {
+                alert("Select a preset to delete.");
+                return;
+            }
+
+            if (confirm(`Are you sure you want to delete the preset '${name}'?`)) {
+                const presets = getPresets();
+                delete presets[name];
+                savePresets(presets);
+                updatePresetList();
+                showToast(`Preset '${name}' deleted.`);
+            }
+        }
+
+        // --- End Preset Logic ---
+
 
         // Date Setup
         const defaultDateStamp = getCurrentDateStamp();
@@ -240,17 +376,26 @@
         }
 
         // Initial Event Listeners
+        document.addEventListener('DOMContentLoaded', updatePresetList);
         imageInput.addEventListener('change', handleImageUpload);
         updateBtn.addEventListener('click', () => processImage(originalImage));
         
-        // Live update on slider change (debounced slightly for performance if needed, but direct is fine for small canvas)
-        noiseRange.addEventListener('change', () => processImage(originalImage));
-        flashRange.addEventListener('change', () => processImage(originalImage));
+        // Settings Listeners
+        noiseRange.addEventListener('input', () => processImage(originalImage));
+        flashRange.addEventListener('input', () => processImage(originalImage));
+        vignetteRange.addEventListener('input', () => processImage(originalImage));
+        aberrationRange.addEventListener('input', () => processImage(originalImage));
         dateToggle.addEventListener('change', () => processImage(originalImage));
         dateInput.addEventListener('input', () => {
             updateDateDisplay();
             processImage(originalImage);
         });
+
+        // Preset Listeners
+        savePresetBtn.addEventListener('click', handleSavePreset);
+        presetSelect.addEventListener('change', handleLoadPreset);
+        deletePresetBtn.addEventListener('click', handleDeletePreset);
+
 
         function handleImageUpload(e) {
             const file = e.target.files[0];
@@ -297,15 +442,19 @@
 
                 // Draw original resized
                 ctx.drawImage(img, 0, 0, width, height);
+                
+                // Get Settings
+                const noiseAmount = parseInt(noiseRange.value);
+                const flashAmount = parseInt(flashRange.value);
+                const vignetteAmount = parseInt(vignetteRange.value);
+                const aberrationAmount = parseInt(aberrationRange.value) / 1000; // smaller, more controllable shift
 
                 // Get pixel data
                 const imageData = ctx.getImageData(0, 0, width, height);
                 const data = imageData.data;
+                const originalData = new Uint8ClampedArray(data); // Copy for sampling
 
-                const noiseAmount = parseInt(noiseRange.value);
-                const flashAmount = parseInt(flashRange.value);
-                
-                // 2. Pixel Manipulation (Noise, Contrast, Green Shift)
+                // 2. Pixel Manipulation
                 for (let i = 0; i < data.length; i += 4) {
                     let r = data[i];
                     let g = data[i + 1];
@@ -317,7 +466,7 @@
 
                     // Noise
                     if (noiseAmount > 0) {
-                        const noise = (Math.random() - 0.5) * noiseAmount; // -20 to 20 approx
+                        const noise = (Math.random() - 0.5) * noiseAmount;
                         r += noise;
                         g += noise;
                         b += noise;
@@ -334,28 +483,59 @@
                     data[i + 1] = g;
                     data[i + 2] = b;
                 }
+                
+                // 3. Chromatic Aberration
+                if (aberrationAmount > 0) {
+                    for (let i = 0; i < data.length; i += 4) {
+                        const x = (i / 4) % width;
+                        const y = Math.floor((i / 4) / width);
+                        
+                        const dx = x - width / 2;
+                        const dy = y - height / 2;
+                        const dist = Math.sqrt(dx*dx + dy*dy);
+                        const shift = dist * aberrationAmount;
+
+                        const r_index = (Math.round(x - shift) + Math.round(y) * width) * 4;
+                        const b_index = (Math.round(x + shift) + Math.round(y) * width) * 4;
+
+                        if (r_index >= 0 && r_index < data.length) {
+                           data[i] = originalData[r_index];
+                        }
+                        if (b_index >= 0 && b_index < data.length) {
+                           data[i+2] = originalData[b_index];
+                        }
+                    }
+                }
 
                 ctx.putImageData(imageData, 0, 0);
-
-                // 3. Simulated Flash (Center Glow / Vignette inverse)
+                
+                // 4. Simulated Flash (Center Glow)
                 if (flashAmount > 0) {
-                    ctx.globalCompositeOperation = 'screen'; // Use screen to brighten
+                    ctx.globalCompositeOperation = 'screen';
                     const gradient = ctx.createRadialGradient(width/2, height/2, width/10, width/2, height/2, width * 0.8);
                     
-                    const flashOpacity = flashAmount / 200; // 0 to 0.5 opacity
-                    gradient.addColorStop(0, `rgba(255, 255, 220, ${flashOpacity})`); // Yellowish white center
+                    const flashOpacity = flashAmount / 200; // 0 to 0.5
+                    gradient.addColorStop(0, `rgba(255, 255, 220, ${flashOpacity})`);
                     gradient.addColorStop(1, `rgba(0, 0, 0, 0)`);
 
                     ctx.fillStyle = gradient;
                     ctx.fillRect(0, 0, width, height);
                     ctx.globalCompositeOperation = 'source-over'; // Reset
                 }
-                
-                // 4. Slight Blur then Sharpen (The "Digicam" look: noisy but digitally sharpened)
-                // Since sharpen is complex per-pixel, we'll just skip heavy convolution for speed
-                // and rely on the noise+contrast to give the "texture".
 
-                // 5. Date Stamp
+                // 5. Vignette (Darken Edges)
+                if (vignetteAmount > 0) {
+                    const gradient = ctx.createRadialGradient(width/2, height/2, width/2, width/2, height/2, width * 0.2);
+                    
+                    const vignetteOpacity = vignetteAmount / 100; // 0 to 1
+                    gradient.addColorStop(0, `rgba(0, 0, 0, 0)`);
+                    gradient.addColorStop(1, `rgba(0, 0, 0, ${vignetteOpacity})`);
+
+                    ctx.fillStyle = gradient;
+                    ctx.fillRect(0, 0, width, height);
+                }
+                
+                // 6. Date Stamp
                 if (dateToggle.checked) {
                     // Font size relative to image height
                     const fontSize = Math.floor(height * 0.05); 
