@@ -3,539 +3,405 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>RetroCam 2000</title>
-    
-    <!-- PWA Settings -->
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#1a1a1a">
-    <link rel="manifest" href="./manifest.json">
-    <link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMAAAADACAYAAABS3GwHAAACFklEQVR4nO3TIQEAMAzAsOmYf5+/jIEGhJd0dvdB1VwHwCUDkGYA0gxAmgFIMwBpBiDNAKQZgDQDkGYA0gxAmgFIMwBpBiDNAKQZgDQDkGYA0gxAmgFIMwBpBiDNAKQZgDQDkGYA0gxAmgFIMwBpBiDNAKQZgDQDkGYA0gxAmgFIMwBpBiDNAKQZgDQDkGYA0gxAmgFIMwBpBiDNAKQZgDQDkGYA0gxAmgFIMwBpBiDNAKQZgDQDkGYA0gxAmgFIMwBpBiDNAKQZgDQDkGYA0gxAmgFIMwBpBiDNAKQZgDQDkGYA0gxAmgFIMwBpBiDNAKQZgDQDkGYA0gxAmgFIMwBpBiDNAKQZgDQDkGYA0gxAmgFIMwBpBiDNAKQZgDQDkGYA0gxAmgFIMwBpBiDNAKQZgDQDkGYA0gxAmgFIMwBpBiDNAKQZgDQDkGYA0gxAmgFIMwBpBiDNAKQZgDQDkGYA0gxAmgFIMwBpBiDNAKQZgDQDkGYA0gxAmgFIMwBpBiDtA7qkWvbFLmqPAAAAAElFTkSuQmCC">
-    
-    <!-- Tailwind CSS (CDN) -->
+    <title>Y2K デジカメ変換機</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Lucide Icons (CDN) -->
-    <script src="https://unpkg.com/lucide@latest"></script>
-
     <style>
-        body { touch-action: manipulation; user-select: none; -webkit-user-select: none; }
-        .pixelated { image-rendering: pixelated; }
-        /* Custom scrollbar for gallery */
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: #262626; }
-        ::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+        @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #1a1a1a;
+            color: #e0e0e0;
+            overscroll-behavior: none;
+        }
+
+        /* 2000年代風のLCD画面っぽい走査線 */
+        .preview-container {
+            position: relative;
+            background: #000;
+            border: 2px solid #444;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
+            overflow: hidden;
+            min-height: 200px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .scanlines::before {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            z-index: 10;
+            background-size: 100% 2px, 3px 100%;
+            pointer-events: none;
+        }
+
+        /* レトロなボタン */
+        .retro-btn {
+            background: linear-gradient(to bottom, #e0e0e0 0%, #bdbdbd 100%);
+            border: 2px solid #888;
+            border-bottom-color: #444;
+            border-right-color: #444;
+            color: #000;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: active 0.1s;
+        }
+        .retro-btn:active {
+            border: 2px solid #444;
+            border-bottom-color: #888;
+            border-right-color: #888;
+            transform: translate(1px, 1px);
+        }
+
+        /* スライダーのカスタマイズ */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: #00ff9d;
+            border: 2px solid #fff;
+            cursor: pointer;
+            margin-top: -8px; 
+            box-shadow: 0 0 5px #00ff9d;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #555;
+            border-radius: 2px;
+        }
     </style>
 </head>
-<body class="bg-[#1a1a1a] text-white font-sans overflow-hidden h-[100dvh] w-screen flex flex-col">
+<body class="min-h-screen flex flex-col items-center py-6 px-4 pb-20">
 
-    <!-- 1. Power/Start Screen -->
-    <div id="screen-power" class="absolute inset-0 z-50 bg-neutral-900 flex flex-col items-center justify-center p-4">
-        <button id="btn-power" class="group flex flex-col items-center gap-4 p-8 rounded-full bg-neutral-800 border border-neutral-700 shadow-[0_0_15px_rgba(0,0,0,0.5)] active:scale-95 transition-all">
-            <i data-lucide="power" class="w-12 h-12 text-teal-400 group-hover:drop-shadow-[0_0_8px_rgba(45,212,191,0.6)]"></i>
-            <span class="font-mono text-sm tracking-widest text-teal-400">POWER ON</span>
-        </button>
-        <p class="mt-8 font-mono text-xs text-neutral-500 text-center">Camera access required.<br>Portrait & Landscape supported.</p>
-    </div>
+    <!-- Header -->
+    <header class="w-full max-w-md mb-6 text-center">
+        <h1 class="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-cyan-500" style="font-family: 'VT323', monospace;">
+            DIGICAM 2003
+        </h1>
+        <p class="text-xs text-gray-400 mt-1">Lo-Fi Image Converter</p>
+    </header>
 
-    <!-- 2. Main Viewfinder Area -->
-    <div id="main-container" class="flex-1 relative bg-black overflow-hidden flex items-center justify-center hidden">
-        
-        <!-- Flash Effect -->
-        <div id="flash-overlay" class="absolute inset-0 bg-white pointer-events-none z-50 opacity-0 transition-opacity duration-150"></div>
+    <!-- Main Interface -->
+    <main class="w-full max-w-md space-y-6">
 
-        <!-- Camera Mode -->
-        <div id="mode-camera" class="w-full h-full relative flex items-center justify-center bg-black">
-            <video id="camera-video" autoplay playsinline muted class="w-full h-full object-contain" style="filter: contrast(1.1) brightness(1.1);"></video>
-            
-            <!-- OSD -->
-            <div class="absolute top-4 left-4 text-green-400 font-mono text-lg drop-shadow-md z-10 pointer-events-none">
-                <span class="animate-pulse">●</span> REC
-            </div>
-            <div id="osd-res" class="absolute top-4 right-4 text-white font-mono text-sm drop-shadow-md bg-black/30 px-2 rounded z-10 pointer-events-none">
-                VGA
-            </div>
-            <div id="osd-date" class="absolute bottom-6 right-4 text-[#ffaa00] font-mono text-xl drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)] font-bold z-10 pointer-events-none">
-                '00 00 00
-            </div>
-
-            <!-- Guide Lines -->
-            <div class="absolute inset-0 pointer-events-none opacity-30">
-                <div class="w-full h-1/3 border-b border-white/50 absolute top-0"></div>
-                <div class="w-full h-1/3 border-b border-white/50 absolute top-1/3"></div>
-                <div class="h-full w-1/3 border-r border-white/50 absolute left-0"></div>
-                <div class="h-full w-1/3 border-r border-white/50 absolute left-1/3"></div>
-            </div>
-        </div>
-
-        <!-- Preview Mode -->
-        <div id="mode-preview" class="w-full h-full hidden flex items-center justify-center bg-neutral-900 relative">
-            <img id="preview-image" src="" alt="Captured" class="max-w-full max-h-full object-contain shadow-[0_0_20px_rgba(0,0,0,0.8)]">
-            <div class="absolute top-4 left-0 w-full text-center pointer-events-none">
-                <span class="bg-blue-600 text-white text-xs px-2 py-1 font-mono uppercase tracking-wider shadow-sm">Review Mode</span>
-            </div>
-        </div>
-
-        <!-- Gallery Mode -->
-        <div id="mode-gallery" class="w-full h-full hidden absolute inset-0 bg-neutral-800 z-20 flex flex-col">
-            <div class="p-4 bg-neutral-800/95 backdrop-blur sticky top-0 z-30 flex items-center gap-2 border-b border-neutral-700">
-                <i data-lucide="image" class="text-teal-400 w-5 h-5"></i>
-                <h2 class="text-teal-400 font-mono">CLOUD GALLERY</h2>
-                <span id="gallery-count" class="text-neutral-500 font-mono text-sm ml-auto">(0)</span>
-            </div>
-            <div id="gallery-grid" class="grid grid-cols-2 md:grid-cols-3 gap-4 p-4 overflow-y-auto pb-32">
-                <!-- Photos injected here -->
-            </div>
-        </div>
-    </div>
-
-    <!-- Hidden Canvas -->
-    <canvas id="process-canvas" class="hidden"></canvas>
-
-    <!-- 3. Controls Area -->
-    <div id="controls-panel" class="bg-neutral-200 border-neutral-300 shadow-[0_-5px_15px_rgba(0,0,0,0.3)] relative z-40 hidden transition-all">
-        
-        <!-- Left: Mode Switch -->
-        <div id="grp-mode" class="flex items-center justify-center">
-            <button id="btn-toggle-mode" class="flex flex-col items-center gap-1 text-neutral-600 active:text-blue-600 active:scale-95 transition-transform">
-                <div class="w-10 h-10 rounded bg-neutral-300 border-b-4 border-neutral-400 flex items-center justify-center shadow-sm">
-                    <i data-lucide="image" id="icon-mode" class="w-5 h-5"></i>
+        <!-- File Input Area -->
+        <div class="bg-gray-800 rounded-lg p-4 border border-gray-700 shadow-lg">
+            <label class="block w-full cursor-pointer">
+                <div class="retro-btn w-full py-3 text-center rounded text-sm flex items-center justify-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    写真を選択 (Select Photo)
                 </div>
-                <span id="text-mode" class="text-[10px] font-bold tracking-tighter">PLAY</span>
-            </button>
+                <input type="file" id="imageInput" accept="image/*" class="hidden">
+            </label>
         </div>
 
-        <!-- Center: Actions -->
-        <div id="grp-actions" class="flex items-center justify-center gap-6">
+        <!-- Preview Area -->
+        <div id="previewArea" class="hidden">
+            <div class="preview-container scanlines rounded-lg relative">
+                <img id="resultImage" class="max-w-full h-auto object-contain" alt="Converted Image" />
+                <div id="loading" class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70 hidden z-20">
+                    <span class="text-green-400 font-mono animate-pulse">PROCESSING...</span>
+                </div>
+            </div>
             
-            <!-- Camera Actions -->
-            <div id="actions-camera" class="flex items-center gap-6">
-                <button id="btn-switch-cam" class="w-10 h-10 rounded-full bg-neutral-300 border-b-2 border-neutral-400 flex items-center justify-center text-neutral-600 active:bg-neutral-400 active:scale-95 shadow-sm">
-                    <i data-lucide="refresh-cw" class="w-4 h-4"></i>
-                </button>
-                <button id="btn-shutter" class="w-20 h-20 rounded-full bg-gradient-to-b from-neutral-200 to-neutral-300 border-4 border-neutral-400 flex items-center justify-center shadow-[0_4px_10px_rgba(0,0,0,0.2)] active:shadow-inner active:scale-95 transition-all">
-                    <div class="w-16 h-16 rounded-full bg-gradient-to-br from-neutral-100 to-neutral-200 border border-neutral-300"></div>
+            <p class="text-center text-xs text-gray-500 mt-2">
+                画像を長押しで保存、または下のボタンを使用
+            </p>
+
+            <!-- Controls -->
+            <div class="mt-6 bg-gray-800 p-4 rounded-lg border border-gray-700">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-green-400 font-mono text-sm">SETTINGS</h3>
+                    <span id="dateDisplay" class="text-xs text-orange-400 font-mono"></span>
+                </div>
+
+                <div class="space-y-4">
+                    <!-- Date Stamp Toggle -->
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-gray-300">Date Stamp</span>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="dateToggle" class="sr-only peer" checked>
+                            <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500"></div>
+                        </label>
+                    </div>
+
+                    <!-- Noise Level -->
+                    <div>
+                        <div class="flex justify-between text-xs mb-1">
+                            <span class="text-gray-400">Noise (ISO)</span>
+                            <span class="text-gray-400">High</span>
+                        </div>
+                        <input type="range" id="noiseRange" min="0" max="100" value="40">
+                    </div>
+
+                    <!-- Flash Level -->
+                    <div>
+                        <div class="flex justify-between text-xs mb-1">
+                            <span class="text-gray-400">Flash Glow</span>
+                            <span class="text-gray-400">Max</span>
+                        </div>
+                        <input type="range" id="flashRange" min="0" max="100" value="30">
+                    </div>
+                </div>
+                
+                <button id="updateBtn" class="mt-4 w-full py-2 bg-gray-700 hover:bg-gray-600 text-green-400 font-mono text-sm border border-gray-600 rounded">
+                    ↺ REFRESH EFFECT
                 </button>
             </div>
 
-            <!-- Preview Actions -->
-            <div id="actions-preview" class="hidden flex gap-4">
-                <button id="btn-delete" class="w-14 h-14 rounded-full bg-red-100 border-b-4 border-red-200 flex flex-col items-center justify-center text-red-600 active:translate-y-1 active:border-b-0 shadow-sm">
-                    <i data-lucide="trash-2" class="w-5 h-5"></i>
-                    <span class="text-[9px] font-bold">DEL</span>
+            <!-- Action Buttons -->
+            <div class="grid grid-cols-2 gap-3 mt-6">
+                <button id="downloadBtn" class="retro-btn py-3 rounded flex flex-col items-center justify-center">
+                    <span class="text-lg">💾</span>
+                    <span class="text-xs mt-1">保存 (Save)</span>
                 </button>
-                <button id="btn-save-local" class="w-14 h-14 rounded-full bg-blue-100 border-b-4 border-blue-200 flex flex-col items-center justify-center text-blue-600 active:translate-y-1 active:border-b-0 shadow-sm">
-                    <i data-lucide="download" class="w-5 h-5"></i>
-                    <span class="text-[9px] font-bold">SAVE</span>
-                </button>
-                <button id="btn-save-cloud" class="w-14 h-14 rounded-full bg-green-100 border-b-4 border-green-200 flex flex-col items-center justify-center text-green-600 active:translate-y-1 active:border-b-0 shadow-sm">
-                    <i data-lucide="share-2" class="w-5 h-5"></i>
-                    <span class="text-[9px] font-bold">CLOUD</span>
+                <button id="copyBtn" class="retro-btn py-3 rounded flex flex-col items-center justify-center">
+                    <span class="text-lg">📋</span>
+                    <span class="text-xs mt-1">コピー (Copy)</span>
                 </button>
             </div>
-
-            <!-- Gallery Status -->
-            <div id="actions-gallery" class="hidden text-xs font-mono text-neutral-500 text-center leading-tight">
-                Viewing<br>Card
-            </div>
-        </div>
-
-        <!-- Right: Deco -->
-        <div id="grp-deco" class="flex flex-col items-end gap-1 opacity-50 justify-center">
-            <div class="w-full h-1 bg-neutral-400 rounded-full line-1"></div>
-            <div class="w-3/4 h-1 bg-neutral-400 rounded-full line-2"></div>
-            <div class="w-1/2 h-1 bg-neutral-400 rounded-full line-3"></div>
-        </div>
-    </div>
-
-    <!-- Firebase SDK (Modular) -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-
-        // --- 設定開始: ここをご自身のFirebase設定に書き換えてください ---
-        const firebaseConfig = {
-            apiKey: "YOUR_API_KEY",
-            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-            projectId: "YOUR_PROJECT_ID",
-            storageBucket: "YOUR_PROJECT_ID.appspot.com",
-            messagingSenderId: "YOUR_SENDER_ID",
-            appId: "YOUR_APP_ID"
-        };
-        // --- 設定終了 ---
-
-        // App State
-        let app, auth, db, user;
-        let stream = null;
-        let capturedDataUrl = null;
-        let facingMode = 'environment';
-        let currentMode = 'power'; // power, camera, preview, gallery
-        let isLandscape = false;
-
-        // DOM Elements
-        const els = {
-            screenPower: document.getElementById('screen-power'),
-            mainContainer: document.getElementById('main-container'),
-            video: document.getElementById('camera-video'),
-            canvas: document.getElementById('process-canvas'),
-            previewImg: document.getElementById('preview-image'),
-            galleryGrid: document.getElementById('gallery-grid'),
-            galleryCount: document.getElementById('gallery-count'),
-            flash: document.getElementById('flash-overlay'),
-            controls: document.getElementById('controls-panel'),
-            osdRes: document.getElementById('osd-res'),
-            osdDate: document.getElementById('osd-date'),
             
-            // Mode containers
-            modeCamera: document.getElementById('mode-camera'),
-            modePreview: document.getElementById('mode-preview'),
-            modeGallery: document.getElementById('mode-gallery'),
+            <div id="toast" class="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-green-500 text-black px-4 py-2 rounded shadow-lg transition-opacity duration-300 opacity-0 pointer-events-none z-50 font-bold text-sm">
+                Copied!
+            </div>
+        </div>
 
-            // Control groups
-            actionsCamera: document.getElementById('actions-camera'),
-            actionsPreview: document.getElementById('actions-preview'),
-            actionsGallery: document.getElementById('actions-gallery'),
+    </main>
+    
+    <!-- Hidden Canvas for Processing -->
+    <canvas id="canvas" class="hidden"></canvas>
 
-            // Buttons
-            btnPower: document.getElementById('btn-power'),
-            btnToggleMode: document.getElementById('btn-toggle-mode'),
-            iconMode: document.getElementById('icon-mode'),
-            textMode: document.getElementById('text-mode'),
-            btnSwitchCam: document.getElementById('btn-switch-cam'),
-            btnShutter: document.getElementById('btn-shutter'),
-            btnDelete: document.getElementById('btn-delete'),
-            btnSaveLocal: document.getElementById('btn-save-local'),
-            btnSaveCloud: document.getElementById('btn-save-cloud'),
-        };
+    <script>
+        const imageInput = document.getElementById('imageInput');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const resultImage = document.getElementById('resultImage');
+        const previewArea = document.getElementById('previewArea');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const copyBtn = document.getElementById('copyBtn');
+        const loading = document.getElementById('loading');
+        const toast = document.getElementById('toast');
+        const updateBtn = document.getElementById('updateBtn');
+        const dateDisplay = document.getElementById('dateDisplay');
 
-        // Initialize Icons
-        lucide.createIcons();
+        // Settings
+        const dateToggle = document.getElementById('dateToggle');
+        const noiseRange = document.getElementById('noiseRange');
+        const flashRange = document.getElementById('flashRange');
 
-        // 1. Initialize Firebase
-        function initFirebase() {
-            try {
-                if (firebaseConfig.apiKey === "YOUR_API_KEY") {
-                    console.warn("Firebase config not set.");
-                    // Demo mode without firebase features if key is missing
-                    return;
-                }
-                app = initializeApp(firebaseConfig);
-                auth = getAuth(app);
-                db = getFirestore(app);
+        let originalImage = null;
 
-                signInAnonymously(auth).catch(console.error);
-                onAuthStateChanged(auth, (u) => {
-                    user = u;
-                    if(user) subscribeToGallery();
-                });
-            } catch (e) {
-                console.error("Firebase init failed:", e);
-            }
-        }
+        // Date Setup
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        dateDisplay.innerText = `'${year.toString().slice(-2)} ${month} ${day}`; // '23 12 09 Style
 
-        function subscribeToGallery() {
-            if (!db) return;
-            // Simplified path for general use: 'retro_photos' collection
-            const q = query(collection(db, 'retro_photos'), orderBy('createdAt', 'desc'));
-            onSnapshot(q, (snapshot) => {
-                els.galleryGrid.innerHTML = '';
-                els.galleryCount.textContent = `(${snapshot.docs.length})`;
-                
-                if (snapshot.empty) {
-                    els.galleryGrid.innerHTML = '<div class="col-span-full text-center text-gray-500 py-10 font-mono text-xs">No images found.</div>';
-                    return;
-                }
+        // Initial Event Listeners
+        imageInput.addEventListener('change', handleImageUpload);
+        updateBtn.addEventListener('click', () => processImage(originalImage));
+        
+        // Live update on slider change (debounced slightly for performance if needed, but direct is fine for small canvas)
+        noiseRange.addEventListener('change', () => processImage(originalImage));
+        flashRange.addEventListener('change', () => processImage(originalImage));
+        dateToggle.addEventListener('change', () => processImage(originalImage));
 
-                snapshot.docs.forEach(doc => {
-                    const data = doc.data();
-                    const date = data.createdAt ? new Date(data.createdAt.seconds * 1000).toLocaleDateString() : 'Just now';
-                    
-                    const div = document.createElement('div');
-                    div.className = "bg-white p-1 shadow-md rotate-1 hover:rotate-0 transition-transform duration-300";
-                    div.innerHTML = `
-                        <img src="${data.imageUrl}" class="w-full aspect-auto object-cover bg-gray-200 pixelated" loading="lazy">
-                        <div class="mt-1 text-[10px] text-gray-500 font-mono text-right">${date}</div>
-                    `;
-                    els.galleryGrid.appendChild(div);
-                });
-            });
-        }
+        function handleImageUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
 
-        // 2. Camera Logic
-        async function startCamera() {
-            try {
-                if (stream) stream.getTracks().forEach(t => t.stop());
-                
-                const constraints = {
-                    video: {
-                        facingMode: facingMode,
-                        width: { ideal: isLandscape ? 1280 : 720 },
-                        height: { ideal: isLandscape ? 720 : 1280 }
-                    },
-                    audio: false
+            loading.classList.remove('hidden');
+            previewArea.classList.remove('hidden');
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const img = new Image();
+                img.onload = () => {
+                    originalImage = img;
+                    processImage(img);
                 };
-                
-                stream = await navigator.mediaDevices.getUserMedia(constraints);
-                els.video.srcObject = stream;
-            } catch (err) {
-                console.error("Camera fail:", err);
-                alert("Camera access denied or failed.");
-            }
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
         }
 
-        function stopCamera() {
-            if (stream) {
-                stream.getTracks().forEach(t => t.stop());
-                stream = null;
-            }
+        function processImage(img) {
+            if (!img) return;
+            loading.classList.remove('hidden');
+
+            // Use setTimeout to allow UI to update (show loading) before heavy processing
+            setTimeout(() => {
+                // 1. Resize Logic (Simulate low megapixel & optimize performance)
+                const maxDimension = 1024; // 2000s cameras were often 1-3MP (1280x960 etc). 1024 is good balance.
+                let width = img.width;
+                let height = img.height;
+
+                if (width > maxDimension || height > maxDimension) {
+                    if (width > height) {
+                        height = Math.round((height * maxDimension) / width);
+                        width = maxDimension;
+                    } else {
+                        width = Math.round((width * maxDimension) / height);
+                        height = maxDimension;
+                    }
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+
+                // Draw original resized
+                ctx.drawImage(img, 0, 0, width, height);
+
+                // Get pixel data
+                const imageData = ctx.getImageData(0, 0, width, height);
+                const data = imageData.data;
+
+                const noiseAmount = parseInt(noiseRange.value);
+                const flashAmount = parseInt(flashRange.value);
+                
+                // 2. Pixel Manipulation (Noise, Contrast, Green Shift)
+                for (let i = 0; i < data.length; i += 4) {
+                    let r = data[i];
+                    let g = data[i + 1];
+                    let b = data[i + 2];
+
+                    // Digicam Green Shift (old sensors often leaned green/cyan)
+                    g = g * 1.02; 
+                    b = b * 1.02;
+
+                    // Noise
+                    if (noiseAmount > 0) {
+                        const noise = (Math.random() - 0.5) * noiseAmount; // -20 to 20 approx
+                        r += noise;
+                        g += noise;
+                        b += noise;
+                    }
+
+                    // Contrast boost (cheap lens look)
+                    const factor = 1.1; // Contrast level
+                    const intercept = 128 * (1 - factor);
+                    r = r * factor + intercept;
+                    g = g * factor + intercept;
+                    b = b * factor + intercept;
+
+                    data[i] = r;
+                    data[i + 1] = g;
+                    data[i + 2] = b;
+                }
+
+                ctx.putImageData(imageData, 0, 0);
+
+                // 3. Simulated Flash (Center Glow / Vignette inverse)
+                if (flashAmount > 0) {
+                    ctx.globalCompositeOperation = 'screen'; // Use screen to brighten
+                    const gradient = ctx.createRadialGradient(width/2, height/2, width/10, width/2, height/2, width * 0.8);
+                    
+                    const flashOpacity = flashAmount / 200; // 0 to 0.5 opacity
+                    gradient.addColorStop(0, `rgba(255, 255, 220, ${flashOpacity})`); // Yellowish white center
+                    gradient.addColorStop(1, `rgba(0, 0, 0, 0)`);
+
+                    ctx.fillStyle = gradient;
+                    ctx.fillRect(0, 0, width, height);
+                    ctx.globalCompositeOperation = 'source-over'; // Reset
+                }
+                
+                // 4. Slight Blur then Sharpen (The "Digicam" look: noisy but digitally sharpened)
+                // Since sharpen is complex per-pixel, we'll just skip heavy convolution for speed
+                // and rely on the noise+contrast to give the "texture".
+
+                // 5. Date Stamp
+                if (dateToggle.checked) {
+                    // Font size relative to image height
+                    const fontSize = Math.floor(height * 0.05); 
+                    ctx.font = `bold ${fontSize}px "Courier New", Courier, monospace`;
+                    const dateStr = `'${year.toString().slice(-2)} ${month} ${day}`;
+                    
+                    const marginX = width * 0.05;
+                    const marginY = height * 0.05;
+
+                    // Digital Orange Color
+                    ctx.fillStyle = "#ffaa00"; 
+                    
+                    // Add a slight glow/shadow to text to make it readable
+                    ctx.shadowColor = "rgba(0,0,0,0.8)";
+                    ctx.shadowBlur = 4;
+                    ctx.shadowOffsetX = 2;
+                    ctx.shadowOffsetY = 2;
+                    
+                    ctx.textAlign = "right";
+                    ctx.fillText(dateStr, width - marginX, height - marginY);
+
+                    // Reset shadow
+                    ctx.shadowColor = "transparent";
+                    ctx.shadowBlur = 0;
+                    ctx.shadowOffsetX = 0;
+                    ctx.shadowOffsetY = 0;
+                }
+
+                // Output
+                const resultDataUrl = canvas.toDataURL('image/jpeg', 0.85); // JPEG artifacts help the look!
+                resultImage.src = resultDataUrl;
+                
+                loading.classList.add('hidden');
+            }, 50);
         }
 
-        // 3. Capture Logic
-        function takePhoto() {
-            if (!stream) return;
-
-            // Flash
-            els.flash.style.opacity = '1';
-            setTimeout(() => els.flash.style.opacity = '0', 150);
-
-            const ctx = els.canvas.getContext('2d');
-            
-            // Set VGA size based on orientation
-            const width = isLandscape ? 640 : 480;
-            const height = isLandscape ? 480 : 640;
-            
-            els.canvas.width = width;
-            els.canvas.height = height;
-            
-            // Fill with black background for letterboxing
-            ctx.fillStyle = '#000000';
-            ctx.fillRect(0, 0, width, height);
-
-            // Draw Video (Contain fit - show full video with black borders)
-            const vW = els.video.videoWidth;
-            const vH = els.video.videoHeight;
-            const vAspect = vW / vH;
-            const cAspect = width / height;
-            
-            let dW, dH, dX, dY;
-            
-            if (vAspect > cAspect) {
-                // Video is wider, fit to width
-                dW = width;
-                dH = width / vAspect;
-                dX = 0;
-                dY = (height - dH) / 2;
-            } else {
-                // Video is taller, fit to height
-                dH = height;
-                dW = height * vAspect;
-                dX = (width - dW) / 2;
-                dY = 0;
-            }
-
-            // Filter
-            ctx.filter = 'contrast(1.2) sepia(0.2) saturate(0.8) brightness(1.1)';
-            ctx.drawImage(els.video, dX, dY, dW, dH);
-            ctx.filter = 'none';
-
-            // Noise
-            const imgData = ctx.getImageData(0, 0, width, height);
-            const data = imgData.data;
-            for (let i = 0; i < data.length; i += 4) {
-                const noise = (Math.random() - 0.5) * 20;
-                data[i] += noise;
-                data[i+1] += noise;
-                data[i+2] += noise;
-            }
-            ctx.putImageData(imgData, 0, 0);
-
-            // Date Stamp
-            const now = new Date();
-            const dateStr = `'${String(now.getFullYear()).slice(2)} ${String(now.getMonth()+1).padStart(2,'0')} ${String(now.getDate()).padStart(2,'0')}`;
-            
-            ctx.fillStyle = '#ffaa00';
-            ctx.shadowColor = 'black';
-            ctx.shadowBlur = 2;
-            ctx.font = isLandscape ? 'bold 24px "Courier New", monospace' : 'bold 20px "Courier New", monospace';
-            ctx.textAlign = 'right';
-            ctx.textBaseline = 'bottom';
-            ctx.fillText(dateStr, width - 15, height - 15);
-
-            // Save
-            capturedDataUrl = els.canvas.toDataURL('image/jpeg', 0.75);
-            els.previewImg.src = capturedDataUrl;
-            
-            switchMode('preview');
-        }
-
-        // 4. UI Handling
-        function switchMode(newMode) {
-            currentMode = newMode;
-            
-            // Reset Views
-            els.screenPower.classList.add('hidden');
-            els.mainContainer.classList.remove('hidden');
-            els.controls.classList.remove('hidden');
-            els.modeCamera.classList.add('hidden');
-            els.modePreview.classList.add('hidden');
-            els.modeGallery.classList.add('hidden');
-            
-            els.actionsCamera.classList.add('hidden');
-            els.actionsPreview.classList.add('hidden');
-            els.actionsGallery.classList.add('hidden');
-
-            if (newMode === 'camera') {
-                els.modeCamera.classList.remove('hidden');
-                els.actionsCamera.classList.remove('hidden');
-                
-                // Toggle Button state
-                els.iconMode.setAttribute('data-lucide', 'image');
-                els.textMode.textContent = 'PLAY';
-                lucide.createIcons();
-                
-                if (!stream) startCamera();
-                updateOSD();
-
-            } else if (newMode === 'preview') {
-                els.modePreview.classList.remove('hidden');
-                els.actionsPreview.classList.remove('hidden');
-                stopCamera();
-
-            } else if (newMode === 'gallery') {
-                els.modeGallery.classList.remove('hidden');
-                els.actionsGallery.classList.remove('hidden');
-                
-                // Toggle Button state
-                els.iconMode.setAttribute('data-lucide', 'camera');
-                els.textMode.textContent = 'REC';
-                lucide.createIcons();
-                stopCamera();
-            }
-        }
-
-        function updateOSD() {
-            els.osdRes.textContent = isLandscape ? "VGA WIDE" : "VGA TALL";
-            const now = new Date();
-            els.osdDate.textContent = `'${String(now.getFullYear()).slice(2)} ${String(now.getMonth()+1).padStart(2,'0')} ${String(now.getDate()).padStart(2,'0')}`;
-        }
-
-        function handleResize() {
-            isLandscape = window.innerWidth > window.innerHeight;
-            
-            const body = document.body;
-            const ctrls = els.controls;
-            const groups = [document.getElementById('grp-mode'), document.getElementById('grp-actions'), document.getElementById('grp-deco')];
-            
-            if (isLandscape) {
-                body.classList.remove('flex-col');
-                body.classList.add('flex-row');
-                
-                ctrls.className = "w-32 h-screen bg-neutral-200 border-l-4 border-neutral-300 flex flex-col items-center justify-between py-6 px-2 shadow-[-5px_0_15px_rgba(0,0,0,0.3)] relative z-40";
-                
-                groups[0].className = "flex flex-col gap-4"; // Mode
-                groups[1].className = "flex flex-col items-center gap-6"; // Actions
-                groups[2].className = "h-12 flex flex-row items-end gap-1 opacity-50"; // Deco
-                
-                document.querySelectorAll('.line-1').forEach(e => e.className = "h-full w-1 bg-neutral-400 rounded-full line-1");
-                document.querySelectorAll('.line-2').forEach(e => e.className = "h-3/4 w-1 bg-neutral-400 rounded-full line-2");
-                document.querySelectorAll('.line-3').forEach(e => e.className = "h-1/2 w-1 bg-neutral-400 rounded-full line-3");
-
-            } else {
-                body.classList.remove('flex-row');
-                body.classList.add('flex-col');
-                
-                ctrls.className = "w-full h-32 bg-neutral-200 border-t-4 border-neutral-300 flex flex-row items-center justify-between px-6 pb-6 pt-4 shadow-[0_-5px_15px_rgba(0,0,0,0.3)] relative z-40";
-                
-                groups[0].className = "flex gap-4";
-                groups[1].className = "flex items-center gap-6";
-                groups[2].className = "w-12 flex flex-col items-end gap-1 opacity-50";
-
-                document.querySelectorAll('.line-1').forEach(e => e.className = "w-full h-1 bg-neutral-400 rounded-full line-1");
-                document.querySelectorAll('.line-2').forEach(e => e.className = "w-3/4 h-1 bg-neutral-400 rounded-full line-2");
-                document.querySelectorAll('.line-3').forEach(e => e.className = "w-1/2 h-1 bg-neutral-400 rounded-full line-3");
-            }
-
-            // Restart camera if running to adjust resolution
-            if (currentMode === 'camera' && stream) {
-                startCamera();
-            }
-            updateOSD();
-        }
-
-        // 5. Event Listeners
-        window.addEventListener('resize', handleResize);
-        
-        els.btnPower.addEventListener('click', () => {
-            handleResize();
-            initFirebase();
-            switchMode('camera');
-        });
-
-        els.btnToggleMode.addEventListener('click', () => {
-            if (currentMode === 'camera') switchMode('gallery');
-            else {
-                switchMode('camera');
-                capturedDataUrl = null;
-            }
-        });
-
-        els.btnShutter.addEventListener('click', takePhoto);
-        
-        els.btnSwitchCam.addEventListener('click', () => {
-            facingMode = facingMode === 'environment' ? 'user' : 'environment';
-            startCamera();
-        });
-
-        els.btnDelete.addEventListener('click', () => {
-            capturedDataUrl = null;
-            switchMode('camera');
-        });
-
-        els.btnSaveLocal.addEventListener('click', () => {
-            if (!capturedDataUrl) return;
+        // Save Function
+        downloadBtn.addEventListener('click', () => {
             const link = document.createElement('a');
-            link.href = capturedDataUrl;
-            link.download = `retro_${Date.now()}.jpg`;
+            link.download = `y2k_photo_${Date.now()}.jpg`;
+            link.href = resultImage.src;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+            showToast("ダウンロードしました");
         });
 
-        els.btnSaveCloud.addEventListener('click', async () => {
-            if (!user) {
-                alert("Firebase not configured or not logged in.");
-                return;
-            }
+        // Copy Function
+        copyBtn.addEventListener('click', async () => {
             try {
-                await addDoc(collection(db, 'retro_photos'), {
-                    imageUrl: capturedDataUrl,
-                    createdAt: serverTimestamp(),
-                    userId: user.uid
-                });
-                alert("Saved to cloud!");
-                switchMode('gallery');
-            } catch (e) {
-                console.error(e);
-                alert("Save failed. Check console.");
+                // Fetch the DataURL as a blob
+                const response = await fetch(resultImage.src);
+                const blob = await response.blob();
+                
+                // Clipboard API requires standard Blob logic
+                const item = new ClipboardItem({ "image/png": blob }); // Most browsers prefer png for clipboard
+                await navigator.clipboard.write([item]);
+                showToast("コピーしました！");
+            } catch (err) {
+                console.error(err);
+                // Fallback for security restrictions or unsupported browsers
+                showToast("画像を長押しして保存してください");
             }
         });
 
-        // Init
-        handleResize();
-
-    </script>
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js', { scope: './' }).then(registration => {
-                    console.log('ServiceWorker registration successful with scope: ', registration.scope);
-                }, err => {
-                    console.log('ServiceWorker registration failed: ', err);
-                });
-            });
+        function showToast(msg) {
+            toast.textContent = msg;
+            toast.classList.remove('opacity-0');
+            setTimeout(() => {
+                toast.classList.add('opacity-0');
+            }, 2000);
         }
+
     </script>
 </body>
 </html>
