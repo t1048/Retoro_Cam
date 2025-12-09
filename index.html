@@ -157,11 +157,29 @@
                         </label>
                     </div>
 
+                    <!-- 4:3 Ratio Toggle -->
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-gray-300">Force 4:3 Ratio</span>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="ratioToggle" class="sr-only peer">
+                            <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500"></div>
+                        </label>
+                    </div>
+
                     <!-- Custom Timestamp -->
                     <div>
                         <label for="dateInput" class="text-xs text-gray-400 block mb-1">Timestamp Text</label>
                         <input id="dateInput" type="text" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-orange-300 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 placeholder:text-gray-500" placeholder="'03 01 01 00:00">
                         <p class="text-[10px] text-gray-500 mt-1">例: '03 08 21 21:15</p>
+                    </div>
+
+                    <!-- Resolution (Pixelation) -->
+                    <div>
+                        <div class="flex justify-between text-xs mb-1">
+                            <span class="text-gray-400">Resolution (Pixels)</span>
+                            <span class="text-gray-400">High</span>
+                        </div>
+                        <input type="range" id="resolutionRange" min="10" max="100" value="100">
                     </div>
 
                     <!-- Noise Level -->
@@ -244,11 +262,14 @@
     
     <!-- Hidden Canvas for Processing -->
     <canvas id="canvas" class="hidden"></canvas>
+    <canvas id="tempCanvas" class="hidden"></canvas>
 
     <script>
         const imageInput = document.getElementById('imageInput');
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
+        const tempCanvas = document.getElementById('tempCanvas'); // For resizing logic
+        const tempCtx = tempCanvas.getContext('2d');
         const resultImage = document.getElementById('resultImage');
         const previewArea = document.getElementById('previewArea');
         const downloadBtn = document.getElementById('downloadBtn');
@@ -261,6 +282,8 @@
 
         // Settings
         const dateToggle = document.getElementById('dateToggle');
+        const ratioToggle = document.getElementById('ratioToggle');
+        const resolutionRange = document.getElementById('resolutionRange');
         const noiseRange = document.getElementById('noiseRange');
         const flashRange = document.getElementById('flashRange');
         const vignetteRange = document.getElementById('vignetteRange');
@@ -275,7 +298,6 @@
         let originalImage = null;
 
         // --- Preset Logic ---
-
         function getPresets() {
             try {
                 const presets = localStorage.getItem('y2kPresets');
@@ -316,7 +338,9 @@
                 noise: noiseRange.value,
                 flash: flashRange.value,
                 vignette: vignetteRange.value,
-                aberration: aberrationRange.value
+                aberration: aberrationRange.value,
+                resolution: resolutionRange.value,
+                ratio43: ratioToggle.checked
             };
 
             const presets = getPresets();
@@ -341,6 +365,8 @@
                 flashRange.value = settings.flash;
                 vignetteRange.value = settings.vignette;
                 aberrationRange.value = settings.aberration;
+                if(settings.resolution) resolutionRange.value = settings.resolution;
+                if(settings.ratio43 !== undefined) ratioToggle.checked = settings.ratio43;
                 
                 // Trigger image processing
                 processImage(originalImage);
@@ -363,7 +389,6 @@
                 showToast(`Preset '${name}' deleted.`);
             }
         }
-
         // --- End Preset Logic ---
 
 
@@ -399,7 +424,9 @@
         flashRange.addEventListener('input', () => processImage(originalImage));
         vignetteRange.addEventListener('input', () => processImage(originalImage));
         aberrationRange.addEventListener('input', () => processImage(originalImage));
+        resolutionRange.addEventListener('input', () => processImage(originalImage));
         dateToggle.addEventListener('change', () => processImage(originalImage));
+        ratioToggle.addEventListener('change', () => processImage(originalImage));
         dateInput.addEventListener('input', () => {
             updateDateDisplay();
             processImage(originalImage);
@@ -434,47 +461,93 @@
             if (!img) return;
             loading.classList.remove('hidden');
 
-            // Use setTimeout to allow UI to update (show loading) before heavy processing
             setTimeout(() => {
-                // 1. Resize Logic (Simulate low megapixel & optimize performance)
-                const maxDimension = 1024; // 2000s cameras were often 1-3MP (1280x960 etc). 1024 is good balance.
-                let width = img.width;
-                let height = img.height;
-
-                if (width > maxDimension || height > maxDimension) {
-                    if (width > height) {
-                        height = Math.round((height * maxDimension) / width);
-                        width = maxDimension;
-                    } else {
-                        width = Math.round((width * maxDimension) / height);
-                        height = maxDimension;
-                    }
-                }
-
-                canvas.width = width;
-                canvas.height = height;
-
-                // Draw original resized
-                ctx.drawImage(img, 0, 0, width, height);
-                
-                // Get Settings
+                // Settings
                 const noiseAmount = parseInt(noiseRange.value);
                 const flashAmount = parseInt(flashRange.value);
                 const vignetteAmount = parseInt(vignetteRange.value);
-                const aberrationAmount = parseInt(aberrationRange.value) / 1000; // smaller, more controllable shift
+                const aberrationAmount = parseInt(aberrationRange.value) / 1000;
+                const resolutionScale = parseInt(resolutionRange.value) / 100;
+                const forceRatio = ratioToggle.checked;
 
+                // 1. Calculate Dimensions (Force 4:3 or original aspect)
+                // Base Max Dimension for processing
+                const maxDimension = 1024; 
+                let sourceX = 0, sourceY = 0, sourceW = img.width, sourceH = img.height;
+                let targetWidth, targetHeight;
+
+                if (forceRatio) {
+                    // Force 4:3 (1.3333...)
+                    const targetRatio = 4 / 3;
+                    const currentRatio = img.width / img.height;
+
+                    if (currentRatio > targetRatio) {
+                        // Image is wider than 4:3 (e.g. 16:9) -> Crop Sides
+                        const newWidth = img.height * targetRatio;
+                        sourceX = (img.width - newWidth) / 2;
+                        sourceW = newWidth;
+                    } else {
+                        // Image is taller than 4:3 (e.g. Portrait) -> Crop Top/Bottom
+                        // Usually Digicam is Landscape 4:3, so we force landscape 4:3 box
+                        const newHeight = img.width / targetRatio;
+                        sourceY = (img.height - newHeight) / 2;
+                        sourceH = newHeight;
+                    }
+                    // For processing size, fit 4:3 into maxDimension
+                    targetWidth = maxDimension;
+                    targetHeight = maxDimension * 0.75;
+                } else {
+                    // Maintain original aspect ratio, just resize to maxDimension
+                     if (sourceW > maxDimension || sourceH > maxDimension) {
+                        if (sourceW > sourceH) {
+                            targetHeight = Math.round((sourceH * maxDimension) / sourceW);
+                            targetWidth = maxDimension;
+                        } else {
+                            targetWidth = Math.round((sourceW * maxDimension) / sourceH);
+                            targetHeight = maxDimension;
+                        }
+                    } else {
+                        targetWidth = sourceW;
+                        targetHeight = sourceH;
+                    }
+                }
+
+                // Set Canvas Size (This is the "Output" size)
+                canvas.width = targetWidth;
+                canvas.height = targetHeight;
+
+                // 2. Pixelation Logic (Downscale -> Upscale with Nearest Neighbor)
+                if (resolutionScale < 1.0) {
+                    // Small dimensions
+                    const smallW = Math.max(1, Math.floor(targetWidth * resolutionScale));
+                    const smallH = Math.max(1, Math.floor(targetHeight * resolutionScale));
+                    
+                    // Draw to temp canvas at tiny size
+                    tempCanvas.width = smallW;
+                    tempCanvas.height = smallH;
+                    tempCtx.drawImage(img, sourceX, sourceY, sourceW, sourceH, 0, 0, smallW, smallH);
+
+                    // Draw back to main canvas with smoothing disabled
+                    ctx.imageSmoothingEnabled = false;
+                    ctx.drawImage(tempCanvas, 0, 0, smallW, smallH, 0, 0, targetWidth, targetHeight);
+                    ctx.imageSmoothingEnabled = true; // Reset for other drawing ops (text etc)
+                } else {
+                    // Just draw normally (cropped if needed)
+                    ctx.drawImage(img, sourceX, sourceY, sourceW, sourceH, 0, 0, targetWidth, targetHeight);
+                }
+                
                 // Get pixel data
-                const imageData = ctx.getImageData(0, 0, width, height);
+                const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight);
                 const data = imageData.data;
                 const originalData = new Uint8ClampedArray(data); // Copy for sampling
 
-                // 2. Pixel Manipulation
+                // 3. Pixel Manipulation
                 for (let i = 0; i < data.length; i += 4) {
                     let r = data[i];
                     let g = data[i + 1];
                     let b = data[i + 2];
 
-                    // Digicam Green Shift (old sensors often leaned green/cyan)
+                    // Digicam Green Shift
                     g = g * 1.02; 
                     b = b * 1.02;
 
@@ -486,8 +559,8 @@
                         b += noise;
                     }
 
-                    // Contrast boost (cheap lens look)
-                    const factor = 1.1; // Contrast level
+                    // Contrast boost
+                    const factor = 1.1; 
                     const intercept = 128 * (1 - factor);
                     r = r * factor + intercept;
                     g = g * factor + intercept;
@@ -498,19 +571,19 @@
                     data[i + 2] = b;
                 }
                 
-                // 3. Chromatic Aberration
+                // 4. Chromatic Aberration
                 if (aberrationAmount > 0) {
                     for (let i = 0; i < data.length; i += 4) {
-                        const x = (i / 4) % width;
-                        const y = Math.floor((i / 4) / width);
+                        const x = (i / 4) % targetWidth;
+                        const y = Math.floor((i / 4) / targetWidth);
                         
-                        const dx = x - width / 2;
-                        const dy = y - height / 2;
+                        const dx = x - targetWidth / 2;
+                        const dy = y - targetHeight / 2;
                         const dist = Math.sqrt(dx*dx + dy*dy);
                         const shift = dist * aberrationAmount;
 
-                        const r_index = (Math.round(x - shift) + Math.round(y) * width) * 4;
-                        const b_index = (Math.round(x + shift) + Math.round(y) * width) * 4;
+                        const r_index = (Math.round(x - shift) + Math.round(y) * targetWidth) * 4;
+                        const b_index = (Math.round(x + shift) + Math.round(y) * targetWidth) * 4;
 
                         if (r_index >= 0 && r_index < data.length) {
                            data[i] = originalData[r_index];
@@ -523,55 +596,56 @@
 
                 ctx.putImageData(imageData, 0, 0);
                 
-                // 4. Simulated Flash (Center Glow)
+                // 5. Simulated Flash
                 if (flashAmount > 0) {
                     ctx.globalCompositeOperation = 'screen';
-                    const gradient = ctx.createRadialGradient(width/2, height/2, width/10, width/2, height/2, width * 0.8);
+                    const gradient = ctx.createRadialGradient(targetWidth/2, targetHeight/2, targetWidth/10, targetWidth/2, targetHeight/2, targetWidth * 0.8);
                     
-                    const flashOpacity = flashAmount / 200; // 0 to 0.5
+                    const flashOpacity = flashAmount / 200; 
                     gradient.addColorStop(0, `rgba(255, 255, 220, ${flashOpacity})`);
                     gradient.addColorStop(1, `rgba(0, 0, 0, 0)`);
 
                     ctx.fillStyle = gradient;
-                    ctx.fillRect(0, 0, width, height);
-                    ctx.globalCompositeOperation = 'source-over'; // Reset
+                    ctx.fillRect(0, 0, targetWidth, targetHeight);
+                    ctx.globalCompositeOperation = 'source-over'; 
                 }
 
-                // 5. Vignette (Darken Edges)
+                // 6. Vignette
                 if (vignetteAmount > 0) {
-                    const gradient = ctx.createRadialGradient(width/2, height/2, width/2, width/2, height/2, width * 0.2);
+                    // 対角線の半分を最大半径として計算し、隅までカバーする
+                    const radius = Math.sqrt(targetWidth ** 2 + targetHeight ** 2) / 2;
+                    // 中心(r=0)から外側(r=radius)へのグラデーション
+                    const gradient = ctx.createRadialGradient(targetWidth/2, targetHeight/2, 0, targetWidth/2, targetHeight/2, radius);
                     
-                    const vignetteOpacity = vignetteAmount / 100; // 0 to 1
+                    const vignetteOpacity = vignetteAmount / 100;
+                    // 中心は透明、外側に向かって徐々に黒くする
                     gradient.addColorStop(0, `rgba(0, 0, 0, 0)`);
+                    gradient.addColorStop(0.4, `rgba(0, 0, 0, 0)`); // 中心付近は明るさを保つ
                     gradient.addColorStop(1, `rgba(0, 0, 0, ${vignetteOpacity})`);
 
                     ctx.fillStyle = gradient;
-                    ctx.fillRect(0, 0, width, height);
+                    ctx.fillRect(0, 0, targetWidth, targetHeight);
                 }
                 
-                // 6. Date Stamp
+                // 7. Date Stamp
                 if (dateToggle.checked) {
-                    // Font size relative to image height
-                    const fontSize = Math.floor(height * 0.05); 
+                    // Re-calculate font size based on current target height
+                    const fontSize = Math.floor(targetHeight * 0.05); 
                     ctx.font = `bold ${fontSize}px "Courier New", Courier, monospace`;
                     const dateStr = getDateStamp();
                     
-                    const marginX = width * 0.05;
-                    const marginY = height * 0.05;
+                    const marginX = targetWidth * 0.05;
+                    const marginY = targetHeight * 0.05;
 
-                    // Digital Orange Color
                     ctx.fillStyle = "#ffaa00"; 
-                    
-                    // Add a slight glow/shadow to text to make it readable
                     ctx.shadowColor = "rgba(0,0,0,0.8)";
                     ctx.shadowBlur = 4;
                     ctx.shadowOffsetX = 2;
                     ctx.shadowOffsetY = 2;
                     
                     ctx.textAlign = "right";
-                    ctx.fillText(dateStr, width - marginX, height - marginY);
+                    ctx.fillText(dateStr, targetWidth - marginX, targetHeight - marginY);
 
-                    // Reset shadow
                     ctx.shadowColor = "transparent";
                     ctx.shadowBlur = 0;
                     ctx.shadowOffsetX = 0;
@@ -579,7 +653,7 @@
                 }
 
                 // Output
-                const resultDataUrl = canvas.toDataURL('image/jpeg', 0.85); // JPEG artifacts help the look!
+                const resultDataUrl = canvas.toDataURL('image/jpeg', 0.85);
                 resultImage.src = resultDataUrl;
                 
                 loading.classList.add('hidden');
@@ -600,17 +674,13 @@
         // Copy Function
         copyBtn.addEventListener('click', async () => {
             try {
-                // Fetch the DataURL as a blob
                 const response = await fetch(resultImage.src);
                 const blob = await response.blob();
-                
-                // Clipboard API requires standard Blob logic
-                const item = new ClipboardItem({ "image/png": blob }); // Most browsers prefer png for clipboard
+                const item = new ClipboardItem({ "image/png": blob });
                 await navigator.clipboard.write([item]);
                 showToast("コピーしました！");
             } catch (err) {
                 console.error(err);
-                // Fallback for security restrictions or unsupported browsers
                 showToast("画像を長押しして保存してください");
             }
         });
