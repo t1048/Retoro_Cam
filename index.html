@@ -6,9 +6,12 @@
     <title>RetroCam 2000</title>
     
     <!-- PWA Settings -->
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#1a1a1a">
+    <link rel="manifest" href="./manifest.json">
+    <link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMAAAADACAYAAABS3GwHAAACFklEQVR4nO3TIQEAMAzAsOmYf5+/jIEGhJd0dvdB1VwHwCUDkGYA0gxAmgFIMwBpBiDNAKQZgDQDkGYA0gxAmgFIMwBpBiDNAKQZgDQDkGYA0gxAmgFIMwBpBiDNAKQZgDQDkGYA0gxAmgFIMwBpBiDNAKQZgDQDkGYA0gxAmgFIMwBpBiDNAKQZgDQDkGYA0gxAmgFIMwBpBiDNAKQZgDQDkGYA0gxAmgFIMwBpBiDNAKQZgDQDkGYA0gxAmgFIMwBpBiDNAKQZgDQDkGYA0gxAmgFIMwBpBiDNAKQZgDQDkGYA0gxAmgFIMwBpBiDNAKQZgDQDkGYA0gxAmgFIMwBpBiDNAKQZgDQDkGYA0gxAmgFIMwBpBiDNAKQZgDQDkGYA0gxAmgFIMwBpBiDNAKQZgDQDkGYA0gxAmgFIMwBpBiDNAKQZgDQDkGYA0gxAmgFIMwBpBiDNAKQZgDQDkGYA0gxAmgFIMwBpBiDNAKQZgDQDkGYA0gxAmgFIMwBpBiDtA7qkWvbFLmqPAAAAAElFTkSuQmCC">
     
     <!-- Tailwind CSS (CDN) -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -55,6 +58,9 @@
             </div>
             <div id="osd-date" class="absolute bottom-6 right-4 text-[#ffaa00] font-mono text-xl drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)] font-bold z-10 pointer-events-none">
                 '00 00 00
+            </div>
+            <div id="osd-zoom" class="absolute bottom-6 left-4 text-cyan-400 font-mono text-sm drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)] z-10 pointer-events-none">
+                ZOOM: 1.0x
             </div>
             <!-- Guide Lines -->
             <div class="absolute inset-0 pointer-events-none opacity-30">
@@ -107,11 +113,17 @@
             
             <!-- Camera Actions -->
             <div id="actions-camera" class="flex items-center gap-6">
+                <button id="btn-zoom-out" class="w-10 h-10 rounded-full bg-neutral-300 border-b-2 border-neutral-400 flex items-center justify-center text-neutral-600 active:bg-neutral-400 active:scale-95 shadow-sm" title="Zoom Out">
+                    <i data-lucide="zoom-out" class="w-4 h-4"></i>
+                </button>
                 <button id="btn-switch-cam" class="w-10 h-10 rounded-full bg-neutral-300 border-b-2 border-neutral-400 flex items-center justify-center text-neutral-600 active:bg-neutral-400 active:scale-95 shadow-sm">
                     <i data-lucide="refresh-cw" class="w-4 h-4"></i>
                 </button>
                 <button id="btn-shutter" class="w-20 h-20 rounded-full bg-gradient-to-b from-neutral-200 to-neutral-300 border-4 border-neutral-400 flex items-center justify-center shadow-[0_4px_10px_rgba(0,0,0,0.2)] active:shadow-inner active:scale-95 transition-all">
                     <div class="w-16 h-16 rounded-full bg-gradient-to-br from-neutral-100 to-neutral-200 border border-neutral-300"></div>
+                </button>
+                <button id="btn-zoom-in" class="w-10 h-10 rounded-full bg-neutral-300 border-b-2 border-neutral-400 flex items-center justify-center text-neutral-600 active:bg-neutral-400 active:scale-95 shadow-sm" title="Zoom In">
+                    <i data-lucide="zoom-in" class="w-4 h-4"></i>
                 </button>
             </div>
 
@@ -169,6 +181,7 @@
         let facingMode = 'environment';
         let currentMode = 'power'; // power, camera, preview, gallery
         let isLandscape = false;
+        let zoomLevel = 1.0; // Zoom level (1.0 = no zoom, max varies by device)
 
         // DOM Elements
         const els = {
@@ -183,6 +196,7 @@
             controls: document.getElementById('controls-panel'),
             osdRes: document.getElementById('osd-res'),
             osdDate: document.getElementById('osd-date'),
+            osdZoom: document.getElementById('osd-zoom'),
             
             // Mode containers
             modeCamera: document.getElementById('mode-camera'),
@@ -201,6 +215,8 @@
             textMode: document.getElementById('text-mode'),
             btnSwitchCam: document.getElementById('btn-switch-cam'),
             btnShutter: document.getElementById('btn-shutter'),
+            btnZoomIn: document.getElementById('btn-zoom-in'),
+            btnZoomOut: document.getElementById('btn-zoom-out'),
             btnDelete: document.getElementById('btn-delete'),
             btnSaveLocal: document.getElementById('btn-save-local'),
             btnSaveCloud: document.getElementById('btn-save-cloud'),
@@ -275,9 +291,29 @@
                 
                 stream = await navigator.mediaDevices.getUserMedia(constraints);
                 els.video.srcObject = stream;
+                applyZoom();
             } catch (err) {
                 console.error("Camera fail:", err);
                 alert("Camera access denied or failed.");
+            }
+        }
+
+        async function applyZoom() {
+            if (!stream) return;
+            try {
+                const videoTrack = stream.getVideoTracks()[0];
+                if (!videoTrack) return;
+                const capabilities = videoTrack.getCapabilities();
+                if (!capabilities.zoom) {
+                    console.warn("Zoom not supported on this device");
+                    return;
+                }
+                const { min = 1.0, max = 1.0 } = capabilities.zoom;
+                const constrainedZoom = Math.max(min, Math.min(zoomLevel, max));
+                await videoTrack.applyConstraints({ zoom: constrainedZoom });
+                els.osdZoom.textContent = `ZOOM: ${constrainedZoom.toFixed(1)}x`;
+            } catch (err) {
+                console.warn("Zoom apply failed:", err);
             }
         }
 
@@ -475,7 +511,18 @@
         
         els.btnSwitchCam.addEventListener('click', () => {
             facingMode = facingMode === 'environment' ? 'user' : 'environment';
+            zoomLevel = 1.0; // Reset zoom when switching cameras
             startCamera();
+        });
+
+        els.btnZoomIn.addEventListener('click', () => {
+            zoomLevel = Math.min(zoomLevel + 0.25, 5.0);
+            applyZoom();
+        });
+
+        els.btnZoomOut.addEventListener('click', () => {
+            zoomLevel = Math.max(zoomLevel - 0.25, 1.0);
+            applyZoom();
         });
 
         els.btnDelete.addEventListener('click', () => {
@@ -515,6 +562,17 @@
         // Init
         handleResize();
 
+    </script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js', { scope: './' }).then(registration => {
+                    console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                }, err => {
+                    console.log('ServiceWorker registration failed: ', err);
+                });
+            });
+        }
     </script>
 </body>
 </html>
