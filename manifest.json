@@ -1,0 +1,25 @@
+{
+  "name": "DIGICAM 2003 - Y2K デジカメ変換機",
+  "short_name": "DIGICAM 2003",
+  "description": "2000年代デジカメ風に写真を変換するLo-Fi Image Converter",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#1a1a1a",
+  "theme_color": "#1a1a1a",
+  "lang": "ja",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
